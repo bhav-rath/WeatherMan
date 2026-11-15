@@ -6,11 +6,24 @@ export async function searchCities(q: string): Promise<City[]> {
   if (!r.ok) throw new Error('geocode failed');
   return (await r.json()).results ?? [];
 }
-export async function getCity(id: number): Promise<City | null> {
-  const r = await fetch(`${GEO}/get?id=${id}`, { next: { revalidate: 86400 } });
-  if (!r.ok) return null;
-  const j = await r.json();
-  return j && j.id ? j : null;
+export async function getCity(id: number, slug = ''): Promise<City | null> {
+  // 1) direct lookup by id
+  try {
+    const r = await fetch(`${GEO}/get?id=${id}`, { next: { revalidate: 86400 } });
+    if (r.ok) {
+      const j = await r.json();
+      if (j && j.id === id) return j;
+    }
+  } catch {}
+  // 2) fallback: search by the name in the slug and match the id
+  const parts = slug.split('-').slice(0, -1);
+  for (let k = 1; k <= Math.min(parts.length, 4); k++) {
+    try {
+      const hit = (await searchCities(parts.slice(0, k).join(' '))).find((c) => c.id === id);
+      if (hit) return hit;
+    } catch {}
+  }
+  return null;
 }
 export async function getForecast(lat: number, lon: number): Promise<Forecast> {
   const u = new URL('https://api.open-meteo.com/v1/forecast');
